@@ -1,0 +1,19 @@
+version: "1.0"
+namespace: kickside.core.threads
+
+# Harness stand-in for kickside/core. Event Viewer imports one library of the
+# platform, kickside.core.threads:contract, and reads two of its methods; this
+# module carries only that library, written from the contract's behaviour and
+# not copied from its sources.
+
+entries:
+  - name: definition
+    kind: ns.definition
+    meta:
+      title: Threads (harness stand-in)
+
+  - name: contract
+    kind: library.lua
+    meta:
+      comment: "Harness stand-in for the threads contract — list and list_events over three fixed threads in two classes, the events of one refused."
+    source: file://contract.lua

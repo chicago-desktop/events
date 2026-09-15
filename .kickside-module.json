@@ -1,0 +1,12 @@
+{
+  "templateVersion": 1,
+  "initialized": true,
+  "identity": {
+    "organization": "chicago",
+    "module": "events",
+    "namespace": "chicago.events",
+    "tag": "chicago-events",
+    "title": "Event Viewer",
+    "githubOwner": "chicago-desktop"
+  }
+}

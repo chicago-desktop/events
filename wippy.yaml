@@ -1,0 +1,33 @@
+organization: chicago
+module: events
+description: Event Viewer for the Chicago desktop — the platform's threads as logs and their events newest first, a page at a time, with type and text filters and each event's properties and payload.
+license: MIT
+repository: https://github.com/chicago-desktop/events
+homepage: https://wippy.ai
+keywords:
+  - kickside
+  - tui
+  - terminal
+  - desktop
+  - chicago
+  - events
+  - logs
+# No `version:` here — the publisher picks it (`wippy publish` bumps the
+# latest published one). A published version is immutable.
+exclude_meta:
+  type:
+    - test
+exclude:
+  - "wippy.lock"
+  - "app:**"
+  - "app.env:**"
+  - "test/**"
+  - "test:**"
+  - ".wippy/**"
+  - ".wippy:**"
+# `wippy publish` packs the entries of src/ and embeds only the fs.directory
+# entries named here (they become fs.embed in the package). The image pack
+# lies outside src/, so without this line the published module has no
+# pictures. Add every pack and asset directory your module declares.
+embed:
+  - chicago.events:images

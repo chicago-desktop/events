@@ -1,0 +1,36 @@
+# Agent instructions
+
+Read and follow [AGENTS.md](AGENTS.md) in full before changing this
+repository: the rules (English only, the local runtime build only, tests from
+the harness), the commands and the traps are there. The window SDK is
+[docs/sdk.md](docs/sdk.md); the skill `wippy-window-app` in `.claude/skills/`
+is the shell's, and its work sequence applies here.
+
+What to know before the first edit:
+
+- **Only a build of the runtime fork runs this module** (chicago-desktop/runtime,
+  a release `v0.3.40a-chicago.2` or newer): the shell declares `gfx`, and a
+  release `wippy` refuses to load it with `node with ID {gfx :gfx} not found`.
+  The same build resolves `chicago/shell` and `chicago/tui-desktop` from
+  their GitHub repositories by tag (`component: github.com/chicago-desktop/…`
+  in `src/_index.yaml`); an older one refuses that dependency. The Makefile's
+  `WIPPY` names the build; `make lint` with a release `wippy` verifies nothing.
+- **`make test` runs the harness in `test/`** with `--host
+  wippy.terminal:host`. The platform is not booted there: `test/stubs/core`
+  stands in for kickside/core with only the threads contract Event Viewer
+  reads, written from its behaviour (the platform's sources have no licence;
+  do not copy them in). No suite draws the window's shot, so a change to its
+  look is checked on a live desktop.
+- **A `local` declared below the function that reads it is a nil global**,
+  silently — `python3 tools/late-locals.py src test/src` finds it, `wippy
+  lint` does not.
+- **An unquoted `: ` in a YAML comment or a `meta.comment`** breaks the whole
+  index and the boot.
+- **A test file not in the `run_cases` form is green without running**:
+  `local run_cases = test.run_cases(define_tests)` and
+  `return {run = function(options) return run_cases(options) end}`. Break a
+  new test on purpose once.
+- **`wippy publish` packs only `src/`**; an image pack outside it ships only
+  when `wippy.yaml` lists it under `embed:`.
+- **`${env:…}` in a registry entry** resolves against the environment
+  registry, not the OS; `exec` does not inherit the OS environment either.

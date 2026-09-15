@@ -1,0 +1,127 @@
+version: "1.0"
+namespace: chicago.events
+
+# Event Viewer for the Chicago shell, "Start → Settings → Event Viewer". The
+# logs are kickside/core's threads and the entries their events.
+#
+# The window reads through kickside.core.threads:contract — the library the
+# HTTP handlers of kickside/core import (list_threads.lua, list_events.lua) —
+# without HTTP. The log tree is its list, a log's entries its list_events, one
+# page at a time. It writes nothing.
+#
+# Rights to the threads are not granted to the window on purpose: the shell
+# spawns it under the actor of the logged-on person, and the application's
+# user group already carries what the web UI uses to read threads. The
+# contract lists only threads whose component that actor may read. Under the
+# service actor (a shell without logon) the window names the refusal in its
+# status bar. The only policy here is for talking to the compositor.
+#
+# Keep the comments of this file free of an unquoted colon followed by a
+# space inside a meta.comment — it breaks the parse of the whole index.
+
+entries:
+  - name: definition
+    kind: ns.definition
+    meta:
+      title: Event Viewer
+      description: Event Viewer for the Chicago desktop — the platform's threads as logs and their events newest first, a page at a time, with type and text filters and each event's properties and payload.
+
+  # ─── Dependencies ────────────────────────────────────────────────────
+  # The shell and the base are resolved from their GitHub repositories by
+  # tag — `component` names the repository, the module keeps its own name
+  # (chicago/shell, chicago/tui-desktop) in the lock. A compatibility range,
+  # never an exact version: the lock holds the exact one, and the range says
+  # what the module was written against. The shell from v0.2.4, the first tag
+  # with chicago.shell.sdk:format.
+  - version: ">=0.2.4"
+    name: dep.chicago.shell
+    kind: ns.dependency
+    meta:
+      comment: "The Chicago shell — the window SDK, the time and refusal wording (chicago.shell.sdk:format) and the resolver of the module's image pack."
+    component: github.com/chicago-desktop/shell
+
+  - version: ">=0.2.0"
+    name: dep.chicago.tui_desktop
+    kind: ns.dependency
+    meta:
+      comment: "The desktop base — the compositor that owns the window's frame, size and input."
+    component: github.com/chicago-desktop/tui-desktop
+
+  # The platform, from the Hub, at the version the application's lock pinned
+  # when Event Viewer moved out (2026-09-15). The application binds its
+  # requirements; Event Viewer only calls its threads contract, under the
+  # logged-on person's actor.
+  - version: ">=v0.1.98"
+    name: dep.kickside.core
+    kind: ns.dependency
+    meta:
+      comment: "The platform's threads and their events — kickside.core.threads:contract (list, list_events)."
+    component: kickside/core
+
+  # chicago.events:images
+  #
+  # The shell finds an image pack in the registry by its meta.type and names a
+  # picture `<entry>/<file>`, here `chicago.events:images/text_document`. PNG
+  # in 32/ and 16/ under assets/images; packed only because wippy.yaml lists
+  # the entry under `embed:`.
+  - name: images
+    kind: fs.directory
+    meta:
+      type: chicago.images
+      comment: "Event Viewer's pictures — the text document at 32 and 16 px, an image pack of the shell."
+    base: module
+    directory: ./assets/images
+    auto_init: false
+
+  # chicago.events:window_scope
+  - name: window_scope
+    kind: security.policy
+    meta:
+      comment: "Rights of the Event Viewer window to talk to the compositor — the process context, the compositor's name in the process registry and sending it frame state."
+    policy:
+      actions:
+        - process.context
+        - process.registry
+        - process.send
+      resources: "*"
+      effect: allow
+
+  # chicago.events:model
+  - name: model
+    kind: library.lua
+    meta:
+      comment: "Pure translation between kickside/core's thread and event rows and the window (log tree, table rows, message line, properties, payload); no IO, so a test runs it on stubs."
+    source: file://model.lua
+    modules:
+      - json
+    imports:
+      format: chicago.shell.sdk:format
+
+  # chicago.events:window
+  - name: window
+    kind: process.lua
+    meta:
+      type: tui_desktop.window
+      title: Event Viewer
+      image: chicago.events:images/text_document
+      icon: "≣"
+      group: Settings
+      order: 56
+      width: 100
+      height: 26
+      window_type: app
+      resizable: true
+      pixel_render: chicago.shell.sdk:render
+      pixel_state: chicago.events:window
+      comment: "The platform's threads as logs and their events newest first, a page at a time — filter by type and text, double-click for the event's properties and payload."
+    source: file://window.lua
+    method: main
+    modules:
+      - time
+    imports:
+      app: chicago.shell.sdk:app
+      model: chicago.events:model
+      format: chicago.shell.sdk:format
+      threads: kickside.core.threads:contract
+    security:
+      policies: [chicago.events:window_scope]

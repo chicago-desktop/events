@@ -1,0 +1,4 @@
+organization: chicago
+module: events-harness
+description: Standalone runnable harness that boots chicago/events with the shell and runs its co-located *_test.lua suites.
+version: "1.0"
