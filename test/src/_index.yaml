@@ -38,19 +38,20 @@ entries:
     kind: function.lua
     meta:
       type: test
-      comment: "Event Viewer's window — the Start menu entry with the module's own picture, the window's policy, and the process's definition over the stand-in contract (the log tree, the first page, paging on end, the type filter, the properties sheet, a refusal in the status bar)."
+      comment: "Event Viewer's window — the Start menu entry with the module's own picture, the window's policy, and the process's definition over the stand-in contract (the log tree, the first page, paging on end, the type filter, an event opened or raised in its own window, the event window itself, a refusal in the status bar)."
       group: Event Viewer
       suite: chicago_events
     source: file://window_test.lua
     method: run
     # Reading a picture takes `registry.get` as well as `fs.get`, and `gfx` to
     # decode it; the window reads the clock with `time`.
-    modules: [gfx, fs, registry, time]
+    modules: [gfx, fs, registry, time, json]
     imports:
       test: wippy.test:test
       app: chicago.shell.sdk:app
       images: chicago.shell.theme:images
       window: chicago.events:window
+      event_window: chicago.events:event
 
   # ─── Host resources ───────────────────────────────────────────────────
   - name: db

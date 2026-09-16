@@ -13,16 +13,28 @@
 -- component (the lifecycle logs, most of the events in the database) are not
 -- in that listing, and the window does not go around it to the table.
 --
--- The details sheet is a mode of the window, not a child window: Esc closes it
--- first, then the window (close_on_escape: update returns false only in the
--- list).
+-- A double click (or Enter) on an event opens it in a window of its own,
+-- chicago.events:event — one window per event: the list asks the compositor
+-- what is open (`desktop.list`, answered on the reply channel) and raises the
+-- window already showing that event, or opens one. The event window is told
+-- only which event and reads it itself.
 local app = require("app")
 local model = require("model")
 local format = require("format")
 local threads = require("threads")
 local time = require("time")
+local desktop = require("desktop")
+local json = require("json")
 
 local definition: any = {title = "Event Viewer"}
+
+-- The compositor's API and the encoder behind one table: a test swaps them
+-- and checks what the list asked for.
+definition.deps = {desktop = desktop, json = json}
+
+local function deps(): any
+    return definition.deps
+end
 
 local TREE_WIDTH = 32
 
@@ -80,9 +92,14 @@ local function open_log(state: any, id: any)
 end
 
 function definition.init(args: any, context: any): any
-    local state: any = {mode = "list", logs = {}, collapsed = {}, log_id = nil, tree_id = nil,
+    local state: any = {logs = {}, collapsed = {}, log_id = nil, tree_id = nil,
         events = {}, more = false, event_id = nil, type = model.ALL_TYPES, find = "",
-        offset = 0, failure = nil, log_failure = nil, detail = nil}
+        offset = 0, failure = nil, log_failure = nil, notice = nil, opening = nil, replies = nil}
+    local replies = deps().desktop.replies()
+    if replies then
+        state.replies = replies
+        context.watch(replies)
+    end
     load_logs(state)
     local first = model.first_log(state.logs)
     if first then open_log(state, first.id) end
@@ -136,6 +153,7 @@ local function list_view(state: any): any
 end
 
 local function status_text(state: any): string
+    if state.notice then return tostring(state.notice) end
     if state.log_failure then return tostring(state.log_failure) end
     if state.failure then return tostring(state.failure) end
     local log = current_log(state)
@@ -145,15 +163,8 @@ local function status_text(state: any): string
 end
 
 function definition.view(state: any, context: any): any
-    local body: any
-    if state.mode == "details" and state.detail then
-        local log = current_log(state)
-        body = model.details_tree(state.detail, log and log.label or "", tonumber(state.offset) or 0)
-    else
-        body = list_view(state)
-    end
     return {kind = "column", gap = 0, children = {
-        body,
+        list_view(state),
         {kind = "statusbar", size = 1, fields = {{text = " " .. status_text(state)}}},
     }}
 end
@@ -167,9 +178,58 @@ local function find_event(state: any, id: any): any
     return nil
 end
 
-local function open_details(state: any)
+-- launch(state, wanted) — open the event's window. A refusal goes to the
+-- status bar.
+local function launch(state: any, wanted: any)
+    local d = deps()
+    local encoded, eerr = d.json.encode(wanted)
+    if not encoded then
+        state.notice = format.explain("open the event", eerr)
+        return
+    end
+    local ok, err = d.desktop.open({entry = model.EVENT_ENTRY, title = model.EVENT_TITLE, args = encoded})
+    if not ok then state.notice = format.explain("open the event", err) end
+end
+
+-- open_event(state) — one window per event. The list asks what is open
+-- first and decides on the answer (`reply`); without a reply channel it
+-- opens a new window rather than doing nothing.
+local function open_event(state: any)
     local event = find_event(state, state.event_id)
-    if event then state.detail, state.mode = event, "details" end
+    if not event then return end
+    local log = current_log(state)
+    local wanted = model.event_args(event, state.log_id, log and log.label or "")
+    state.notice = nil
+    if state.replies ~= nil and deps().desktop.request("desktop.list", {}) then
+        state.opening = wanted
+        return
+    end
+    launch(state, wanted)
+end
+
+-- reply(state, action) — the compositor's answer: the window list an open is
+-- waiting for (raise the event's window if it is there, open it if not), or
+-- a refusal of a command sent earlier.
+local function reply(state: any, action: any): boolean
+    local kind, windows, why = model.take_reply(model.unwrap(action.value))
+    if kind == "notice" then
+        state.notice = tostring(windows)
+        return true
+    end
+    if kind ~= "list" or state.opening == nil then return false end
+    local wanted: any = state.opening
+    state.opening = nil
+    local d = deps()
+    -- A refused list still opens the window: the list cannot see what is
+    -- open, and a second copy beats doing nothing.
+    local id = why == nil and model.open_target(windows, wanted, d.json.decode) or nil
+    if id then
+        local ok, err = d.desktop.focus(id)
+        if not ok then state.notice = format.explain("raise the event", err) end
+        return true
+    end
+    launch(state, wanted)
+    return true
 end
 
 local function refresh(state: any)
@@ -201,21 +261,22 @@ local function on_events(state: any, action: any): boolean
     local again = id ~= nil and id == state.event_id and action.pointer == true
     state.event_id = id or state.event_id
     if action.type == "activate" or again then
-        open_details(state)
+        open_event(state)
         return true
     end
     return true
 end
 
 function definition.update(state: any, action: any, context: any)
+    if action.type == "channel" then
+        if not action.ok then return false end
+        if state.replies ~= nil and action.channel == state.replies then return reply(state, action) end
+        return false
+    end
     if action.type == "resize" or action.type == "tick" or action.type == "timer" then return false end
 
     if action.type == "key" then
-        if action.key_type == "esc" and state.mode ~= "list" then
-            state.mode, state.detail = "list", nil
-            return true
-        end
-        if (action.key_type == "f5" or action.key == "F5") and state.mode == "list" then
+        if action.key_type == "f5" or action.key == "F5" then
             refresh(state)
             return true
         end
@@ -252,8 +313,6 @@ function definition.update(state: any, action: any, context: any)
     elseif action.id == "clear" then
         state.type, state.find, state.event_id = model.ALL_TYPES, "", nil
         load_events(state, false)
-    elseif action.id == "details_close" then
-        state.mode, state.detail = "list", nil
     end
     return true
 end

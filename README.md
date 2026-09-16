@@ -16,10 +16,14 @@ newest first, in the manner of the classic Event Viewer. It writes nothing.
   last loaded row.
 - **Type** asks the platform for one type of event; **Find** filters the
   loaded events by text in any column; **Clear filter** drops both.
-- **The event's properties** (double-click or Enter): date, source, type,
-  role, log, sequence and id, the trace, run, cause and correlation when the
-  event carries them, and the payload as JSON with sorted keys. Esc goes back
-  to the list, and a second Esc closes the window.
+- **The event's properties** (double-click or Enter) open in a window of
+  their own, **Event Properties** — one window per event: a second
+  double-click on the same event raises the window already open. It shows
+  the date, source, type, role, log, sequence and id, the trace, run, cause
+  and correlation when the event carries them, and the payload as JSON with
+  sorted keys; F5 reads the event again, Esc or Close closes it. The window
+  is told only which event (`{thread_id, seq, log}`) and reads it itself, so
+  a payload of any size never travels through a window argument.
 - **Refresh** or F5 reads the logs again. A refusal is named in the status
   bar by its kind ("permission denied", "not found"), never shown as an empty
   log.
@@ -38,8 +42,9 @@ newest first, in the manner of the classic Event Viewer. It writes nothing.
   ```
 
 - **The platform.** `kickside/core` from v0.1.98, from the Hub — the
-  window imports its `kickside.core.threads:contract` and calls `list` and
-  `list_events`. An application of the platform has it already and binds its
+  windows import its `kickside.core.threads:contract` and call `list` and
+  `list_events` (the event window bounds it to one sequence number with
+  `from_seq` and `to_seq`). An application of the platform has it already and binds its
   requirements as usual.
 - **The logged-on person's group.** The shell spawns the window under the
   actor of the person who logged on ("Log On to Windows"), and the contract
@@ -50,16 +55,20 @@ newest first, in the manner of the classic Event Viewer. It writes nothing.
   the shell's service actor (a shell without logon) the window names the
   refusal in its status bar.
 
-Its picture is the module's own, `chicago.events:images/text_document` — an
-image pack of the shell under `assets/images` (32 and 16 px) copied from the
-shell's interim icon set (see `assets/images/SOURCE.md`).
+Its picture is the module's own pixel art, `chicago.events:images/event_viewer`
+— a log sheet with an error, a warning and an information mark, an image pack
+of the shell under `assets/images` (32 and 16 px), drawn by
+`tools/event_icons.py` (see `assets/images/SOURCE.md`).
 
 ## Inside
 
 - `chicago.events:window` — the window, an application on the shell's SDK
-  (`chicago.shell.sdk:app`): the tree, the table, the select, the input, the
-  status bar and the properties sheet are the SDK's components, the same in
-  cells and in pixels. The IO lives here.
+  (`chicago.shell.sdk:app`): the tree, the table, the select, the input and
+  the status bar are the SDK's components, the same in cells and in pixels.
+  The IO lives here, and so does opening an event's window (it asks the
+  compositor what is open first, through the base's window API).
+- `chicago.events:event` — the Event Properties window, one per event, not in
+  the Start menu.
 - `chicago.events:model` — the pure translation between the contract's
   thread and event rows and the window (the log tree, the table rows, the
   message line, the page request, the properties, the payload); times and
@@ -90,8 +99,10 @@ The suites: `model_test` (log labels and the class tree, the type split and
 the message line, paging newest first, the text and type filters, the
 payload and the properties) and `window_test` (the entry, the picture, the
 policy, and the window's definition over the stand-in contract — the first
-page, paging on `end`, the type filter, the properties sheet and a refused
-log in the status bar).
+page, paging on `end`, the type filter, an event opened in its own window
+or raised when it is already open, the event window reading one event by
+its sequence and saying why when there is none, and a refused log in the
+status bar).
 
 `make test` does not boot the platform: `test/stubs/core` stands in for
 kickside/core with only the library Event Viewer imports — three threads in

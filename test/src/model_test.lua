@@ -238,7 +238,7 @@ local function define_tests()
             local payload = by_id(tree, "payload")
             test.eq(payload.kind, "text")
             test.eq(payload.text, model.payload_text(model.event(event())), "the whole payload: the SDK wraps it")
-            test.eq(by_id(tree, "details_close").default, true)
+            test.eq(by_id(tree, "close").default, true)
         end)
     end)
 

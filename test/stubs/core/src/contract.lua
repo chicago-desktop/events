@@ -104,6 +104,9 @@ function contract.list_events(args: any): (any, any)
     if err ~= nil then return nil, err end
     local wanted = tonumber(limit) or 100
     local before = tonumber(request.before)
+    -- The real contract's seq bounds, both inclusive.
+    local from_seq = tonumber(request.from_seq)
+    local to_seq = tonumber(request.to_seq)
     local event_type = request.event_type
     local rows = EVENTS[request.thread_id] or {}
     local first, last, step = #rows, 1, -1
@@ -111,7 +114,8 @@ function contract.list_events(args: any): (any, any)
     local out = {}
     for index = first, last, step do
         local row = rows[index]
-        if (before == nil or row.seq < before) and (event_type == nil or row.type == event_type) then
+        if (before == nil or row.seq < before) and (event_type == nil or row.type == event_type)
+            and (from_seq == nil or row.seq >= from_seq) and (to_seq == nil or row.seq <= to_seq) then
             out[#out + 1] = copy(row)
             if #out >= wanted then break end
         end

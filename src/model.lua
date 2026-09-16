@@ -434,7 +434,111 @@ function model.details_tree(event: any, log_label: any, offset: number): any
         {kind = "label", size = 1, text = "Payload:"},
         {kind = "text", id = "payload", text = model.payload_text(event)},
         {kind = "row", size = 2, gap = 1, align = "right", children = {
-            {kind = "button", id = "details_close", size = 10, text = "Close", default = true},
+            {kind = "button", id = "close", size = 10, text = "Close", default = true},
+        }},
+    }}
+end
+
+-- ─── the event's own window ─────────────────────────────────────────────
+--
+-- A double click opens the event in a window of its own
+-- (chicago.events:event), one window per event: the list asks the
+-- compositor what is open and raises the window already showing it. The
+-- window is told only which event — {thread_id, seq, log} as JSON, the
+-- compositor carries args only as a string — and reads the event itself, so
+-- a payload of any size never travels through a window argument.
+
+model.EVENT_ENTRY = "chicago.events:event"
+model.EVENT_TITLE = "Event Properties"
+
+-- event_args(event, thread_id, log_label) -> {thread_id, seq, log}
+--
+-- The thread is the log the list has open, not a field of the row: a row
+-- may come without it, and the list knows which log it read.
+function model.event_args(event: any, thread_id: any, log_label: any): any
+    return {thread_id = text(thread_id), seq = math.tointeger(tonumber(event.seq)), log = text(log_label)}
+end
+
+-- read_args(args, decode) -> {thread_id?, seq?, log}
+--
+-- The JSON text the list opened the window with (decoded by `decode`,
+-- json.decode), or a table (a test, a direct call). Anything else names no
+-- event, and the window says so.
+function model.read_args(args: any, decode: any): any
+    local value: any = args
+    if type(args) == "string" and args:sub(1, 1) == "{" and type(decode) == "function" then
+        local ok, decoded = pcall(decode, args)
+        value = ok and decoded or nil
+    end
+    if type(value) ~= "table" then return {log = ""} end
+    local thread_id = type(value.thread_id) == "string" and value.thread_id ~= "" and value.thread_id or nil
+    local seq = math.tointeger(tonumber(value.seq))
+    return {thread_id = thread_id, seq = seq, log = text(value.log)}
+end
+
+-- event_request(thread_id, seq) — one event, by its sequence: the contract's
+-- seq bounds are inclusive on both ends.
+function model.event_request(thread_id: string, seq: integer): any
+    return {thread_id = thread_id, from_seq = seq, to_seq = seq, limit = 1}
+end
+
+-- same_event(a, b) — the args of two windows name the same event.
+local function same_event(a: any, b: any): boolean
+    return a.thread_id ~= nil and a.thread_id == b.thread_id and a.seq ~= nil and a.seq == b.seq
+end
+
+-- open_target(windows, wanted, decode) -> the id of the window already
+-- showing that event | nil
+function model.open_target(windows: any, wanted: any, decode: any): string?
+    for _, raw in ipairs(type(windows) == "table" and windows or {}) do
+        local window: any = raw
+        if type(window) == "table" and window.entry == model.EVENT_ENTRY and type(window.id) == "string"
+            and same_event(model.read_args(window.args, decode), wanted) then
+            return window.id
+        end
+    end
+    return nil
+end
+
+-- unwrap(value) -> table
+--
+-- A message's payload arrives wrapped: a Message whose payload is userdata,
+-- and inside it sometimes an array of one element. A field read directly
+-- turns out nil without an error.
+function model.unwrap(got: any): any
+    local value: any = got
+    if type(got) == "userdata" or (type(got) == "table" and type(got.payload) == "function") then
+        value = got:payload()
+    end
+    if type(value) == "userdata" then
+        local ok, decoded = pcall(function() return value:data() end)
+        value = ok and decoded or {}
+    end
+    if type(value) == "table" and value[1] ~= nil and #value > 0 then value = value[1] end
+    return type(value) == "table" and value or {}
+end
+
+-- take_reply(body) -> "list", windows | "list", nil, why | "notice", text | nil
+--
+-- A reply on the compositor's channel: the window list an open is waiting
+-- for, or a refusal of a command sent earlier (it goes to the status bar).
+function model.take_reply(body: any): (string?, any, string?)
+    if type(body) ~= "table" then return nil, nil, nil end
+    if body.unsolicited or (body.ok == false and body.command ~= "desktop.list") then
+        return "notice", text(body.command or "the desktop") .. " refused: " .. text(body.error or "no reason"), nil
+    end
+    if body.command ~= "desktop.list" then return nil, nil, nil end
+    if body.ok == false then return "list", nil, text(body.error or "no reason") end
+    return "list", type(body.windows) == "table" and body.windows or {}, nil
+end
+
+-- missing_tree(reason) — the event window when there is no event to show:
+-- the reason, and Close.
+function model.missing_tree(reason: any): any
+    return {kind = "column", padding = 1, padding_bottom = 0, gap = 1, children = {
+        {kind = "label", id = "missing", alert = true, wrap = true, text = text(reason)},
+        {kind = "row", size = 2, gap = 1, align = "right", children = {
+            {kind = "button", id = "close", size = 10, text = "Close", default = true},
         }},
     }}
 end
